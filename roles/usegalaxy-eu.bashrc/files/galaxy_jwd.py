@@ -302,8 +302,9 @@ def get_object_store_backends(galaxy_config_file: str) -> str:
 
         if object_store_config:
             backends = {}
-            for backend_id in object_store_config.get("backends", []):
-                for extra_dir in object_store_config[backend_id].get("extra_dirs", []):
+            for backend in object_store_config.get("backends", []):
+                backend_id = backend["id"]
+                for extra_dir in object_store_config[backend].get("extra_dirs", []):
                     if extra_dir.get("type") == "job_work":
                         backends[backend_id] = extra_dir["path"]
                         continue
