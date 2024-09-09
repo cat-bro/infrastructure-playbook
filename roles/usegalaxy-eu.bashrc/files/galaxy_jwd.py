@@ -282,7 +282,7 @@ def get_object_store_backends(galaxy_config_file: str) -> str:
     with open(galaxy_config_file, "r") as config:
         object_store_config_path = None
         object_store_config = None
-        galaxy_config = yaml.safe_load(galaxy_config_file)
+        galaxy_config = yaml.safe_load(config)
         if "object_store_config" in galaxy_config["galaxy"]:
             object_store_config = galaxy_config["galaxy"][
                 "object_store_config"
@@ -296,7 +296,8 @@ def get_object_store_backends(galaxy_config_file: str) -> str:
 
         if object_store_config_path:
             if object_store_config_path.endswith("yml") or object_store_config_path.endswith("yaml"):
-                object_store_config = yaml.safe_load(object_store_config_path)
+                with open(object_store_config_path) as handle:
+                    object_store_config = yaml.safe_load(handle)
             else:  # Assume xml for anything that doesn't end with yaml or yml
                 return parse_object_store_xml(object_store_config_path)
 
