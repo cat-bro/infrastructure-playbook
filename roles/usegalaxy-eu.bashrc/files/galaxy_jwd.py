@@ -161,8 +161,9 @@ def main():
         pgpass_file=os.path.expanduser("~/.pgpass")
     )
 
-    object_store_conf = get_object_store_conf_path(galaxy_config_file)
-    backends = parse_object_store(object_store_conf)
+    # object_store_conf = get_object_store_conf_path(galaxy_config_file)
+    # backends = parse_object_store(object_store_conf)
+    backends = get_object_store_backends(galaxy_config_file)
 
     # Add pulsar staging directory (runner: pulsar_embedded) to backends
     backends["pulsar_embedded"] = get_pulsar_staging_dir(
@@ -262,33 +263,54 @@ def extract_password_from_pgpass(pgpass_file: str) -> str:
                 )
 
 
-def get_object_store_conf_path(galaxy_config_file: str) -> str:
+def get_object_store_backends(galaxy_config_file: str) -> str:
     """Get the path to the object_store_conf.xml file.
 
     Args:
         galaxy_config_file: Path to the galaxy.yml file.
 
     Returns:
-        Path to the object_store_conf.xml file.
+        Dictionary of object store backend id and path of type 'job_work'.
 
     Raises:
         ValueError: The object store configuration file specified in the
             Galaxy configuration does not exist.
     """
+    # object store config may be defined inline in galaxy.yml, in an .xml
+    # file or in a .yml file.
     object_store_conf = ""
     with open(galaxy_config_file, "r") as config:
-        for line in config:
-            if line.strip().startswith("object_store_config_file"):
-                object_store_conf = line.split(":")[1].strip()
+        object_store_config_path = None
+        object_store_config = None
+        galaxy_config = yaml.safe_load(galaxy_config_file)
+        if "object_store_config" in galaxy_config["galaxy"]:
+            object_store_config = galaxy_config["galaxy"][
+                "object_store_config"
+            ]
+        elif "object_store_config_file" in galaxy_config["galaxy"]:
+            object_store_config_path = galaxy_config["galaxy"][
+                "object_store_config_file"
+            ]
+            if not os.path.isfile(object_store_config_path):
+                raise ValueError(f"{object_store_config_path} does not exist")
 
-                # Check if the object_store_conf.xml file exists
-                if not os.path.isfile(object_store_conf):
-                    raise ValueError(f"{object_store_conf} does not exist")
+        if object_store_config_path:
+            if object_store_config_path.endswith("yml") or object_store_config_path.endswith("yaml"):
+                object_store_config = yaml.safe_load(object_store_config_path)
+            else:  # Assume xml for anything that doesn't end with yaml or yml
+                return parse_object_store_xml(object_store_config_path)
 
-                return object_store_conf
+        if object_store_config:
+            backends = {}
+            for backend_id in object_store_conf.get("backends", []):
+                for extra_dir in object_store_conf[backend_id].get("extra_dirs", []):
+                    if extra_dir.get("type") == "job_work":
+                        backends[backend_id] = extra_dir["path"]
+                        continue
+            return backends
 
 
-def parse_object_store(object_store_conf: str) -> dict:
+def parse_object_store_xml(object_store_conf: str) -> dict:
     """Get the path of type 'job_work' from the extra_dir's for each backend.
 
     Args:
