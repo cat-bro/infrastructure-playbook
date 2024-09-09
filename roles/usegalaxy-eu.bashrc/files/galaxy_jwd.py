@@ -420,11 +420,6 @@ def decode_path(
     # 3. Additionally, we can also try and find the file
     # '__instrument_core_epoch_end' and compare the timestamp in that with the
     # 'update_time' (metadata[1]) of the job.
-    print(jwd_path)
-    print(os.path.exists(jwd_path))
-    print(os.path.exists(f"{jwd_path}/tool_script.sh"))
-    print(os.path.exists(f"{jwd_path}/inputs"))
-    print(os.path.exists(f"{jwd_path}/outputs"))
     if (
         os.path.exists(jwd_path)
         and os.path.exists(f"{jwd_path}/tool_script.sh")
