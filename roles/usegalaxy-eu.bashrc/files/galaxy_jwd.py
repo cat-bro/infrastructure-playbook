@@ -182,6 +182,13 @@ def main():
     if args.operation == "get":
         job_id = args.job_id
         object_store_id, job_runner_name = db.get_job_info(job_id)
+        print(
+            "these args for decode path:",
+            job_id,
+            [object_store_id],
+            backends,
+            job_runner_name,
+        )
         jwd_path = decode_path(
             job_id, [object_store_id], backends, job_runner_name
         )
@@ -263,6 +270,17 @@ def extract_password_from_pgpass(pgpass_file: str) -> str:
                 )
 
 
+def get_jwd_path(job_id, prefix):
+    if len(str(job_id)) > 6:
+        nine_digit_id = "0" * (9 - len(str(job_id))) + str(job_id)
+        return os.path.join(
+            prefix, nine_digit_id[:3], nine_digit_id[3:6], str(job_id)
+        )
+    elif len(str(job_id)) <= 6:
+        six_digit_id = "0" * (6 - len(str(job_id))) + str(job_id)
+        return os.path.join(prefix, six_digit_id[:3], str(job_id))
+
+
 def get_object_store_backends(galaxy_config_file: str) -> str:
     """Get the path to the object_store_conf.xml file.
 
@@ -304,7 +322,7 @@ def get_object_store_backends(galaxy_config_file: str) -> str:
             backends = {}
             for backend in object_store_config.get("backends", []):
                 backend_id = backend["id"]
-                for extra_dir in object_store_config[backend].get("extra_dirs", []):
+                for extra_dir in backend.get("extra_dirs", []):
                     if extra_dir.get("type") == "job_work":
                         backends[backend_id] = extra_dir["path"]
                         continue
@@ -389,10 +407,11 @@ def decode_path(
     if (job_runner_name or "").startswith("pulsar_embedded"):
         jwd_path = f"{backends_dict['pulsar_embedded']}/{job_id}"
     else:
-        jwd_path = (
-            f"{backends_dict[metadata[0]]}/"
-            f"0{job_id[0:2]}/{job_id[2:5]}/{job_id}"
-        )
+        jwd_path = get_jwd_path(job_id, backends_dict[metadata[0]])
+        # jwd_path = (
+        #     f"{backends_dict[metadata[0]]}/"
+        #     f"0{job_id[0:2]}/{job_id[2:5]}/{job_id}"
+        # )
 
     # Validate that the path is a JWD
     # It is a JWD if the following conditions are true:
@@ -401,6 +420,11 @@ def decode_path(
     # 3. Additionally, we can also try and find the file
     # '__instrument_core_epoch_end' and compare the timestamp in that with the
     # 'update_time' (metadata[1]) of the job.
+    print(jwd_path)
+    print(os.path.exists(jwd_path))
+    print(os.path.exists(f"{jwd_path}/tool_script.sh"))
+    print(os.path.exists(f"{jwd_path}/inputs"))
+    print(os.path.exists(f"{jwd_path}/outputs"))
     if (
         os.path.exists(jwd_path)
         and os.path.exists(f"{jwd_path}/tool_script.sh")
