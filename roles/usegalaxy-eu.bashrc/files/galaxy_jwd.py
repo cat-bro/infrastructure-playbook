@@ -278,10 +278,9 @@ def get_object_store_backends(galaxy_config_file: str) -> str:
     """
     # object store config may be defined inline in galaxy.yml, in an .xml
     # file or in a .yml file.
-    object_store_conf = ""
+    object_store_config_path = None
+    object_store_config = None
     with open(galaxy_config_file, "r") as config:
-        object_store_config_path = None
-        object_store_config = None
         galaxy_config = yaml.safe_load(config)
         if "object_store_config" in galaxy_config["galaxy"]:
             object_store_config = galaxy_config["galaxy"][
@@ -303,8 +302,8 @@ def get_object_store_backends(galaxy_config_file: str) -> str:
 
         if object_store_config:
             backends = {}
-            for backend_id in object_store_conf.get("backends", []):
-                for extra_dir in object_store_conf[backend_id].get("extra_dirs", []):
+            for backend_id in object_store_config.get("backends", []):
+                for extra_dir in object_store_config[backend_id].get("extra_dirs", []):
                     if extra_dir.get("type") == "job_work":
                         backends[backend_id] = extra_dir["path"]
                         continue
