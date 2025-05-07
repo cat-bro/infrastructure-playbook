@@ -1,0 +1,82 @@
+- hosts: localhost
+  vars_files:
+    - roles/galaxyproject.galaxy/defaults/main.yml
+    - roles/usegalaxy_eu.galaxy_systemd/defaults/main.yml
+    - group_vars/sn06.yml
+    - group_vars/gxconfig.yml # The base galaxy configuration
+    - templates/galaxy/config/job_conf.yml
+  vars:
+    - tpv_check_dir: tpv_check
+    - venv_path: .tpv_test
+    - dynamic_job_rules_src_dir: "files/galaxy/dynamic_rules/usegalaxy"
+    - galaxy_job_rules:
+      - total_perspective_vortex/tools.yml
+      - total_perspective_vortex/interactive_tools.yml
+      - total_perspective_vortex/users.yml
+      - total_perspective_vortex/roles.yml
+      - total_perspective_vortex/destinations.yml
+    # vault secrets
+    - rabbitmq_password_galaxy_it01: placeholder
+    - rabbitmq_password_galaxy_mira_pulsar: placeholder
+    - rabbitmq_password_galaxy_sanjay_pulsar: placeholder
+    - rabbitmq_password_galaxy_sk01: placeholder
+    - rabbitmq_password_galaxy_it02: placeholder
+    - rabbitmq_password_galaxy_it03: placeholder
+    - rabbitmq_password_galaxy_pt01: placeholder
+    - rabbitmq_password_galaxy_be01: placeholder
+    - rabbitmq_password_galaxy_uk01: placeholder
+    - rabbitmq_password_galaxy_fr01: placeholder
+    - rabbitmq_password_galaxy_fi01: placeholder
+    - rabbitmq_password_galaxy_no01: placeholder
+    - rabbitmq_password_galaxy_es01: placeholder
+    - rabbitmq_password_galaxy_cz01: placeholder
+  tasks:
+    - name: Create virtualenv
+      command: "virtualenv {{ venv_path }}"
+    - name: Install tpv
+      command: "{{ venv_path }}/bin/pip install git+https://github.com/galaxyproject/total-perspective-vortex.git galaxy-app"
+    - name: ensure dirs exists
+      file: 
+        path: "{{ item }}"
+        state: directory
+      with_items:
+        - "{{ tpv_check_dir }}"
+        - "{{ tpv_check_dir }}/total_perspective_vortex"
+    - name: copy job_conf file
+      template:
+        src: "templates/galaxy/config/job_conf.yml.j2"
+        dest: "{{ tpv_check_dir }}/job_conf.yml"
+    - name: Get shared db file
+      get_url:
+        url: "https://raw.githubusercontent.com/galaxyproject/tpv-shared-database/main/tools.yml"
+        dest: "{{ tpv_check_dir }}/shared_tpv_tools.yml"
+    - name: Install dynamic job rules (static) # dynamic job rules tasks copied from https://github.com/galaxyproject/ansible-galaxy/blob/main/tasks/static_setup.yml
+      copy:
+        src: "{{ dynamic_job_rules_src_dir }}/{{ item }}"
+        dest: "{{ tpv_check_dir }}/{{ item }}"
+        mode: 0644
+      with_items: "{{ galaxy_job_rules }}"
+      when: not item.endswith(".j2")
+    - name: Install dynamic job rules (template)
+      template:
+        src: "{{ dynamic_job_rules_src_dir }}/{{ item }}"
+        dest: "{{ tpv_check_dir }}/{{ item | regex_replace(regex) }}"
+        mode: 0644
+      vars:
+        regex: '\.j2$'
+      with_items: "{{ galaxy_job_rules }}"
+      when: item.endswith(".j2")
+    - name: Create dry-run bash script
+      vars:
+        regex: '\.j2$'
+      copy:
+        dest : run_dry_run.sh
+        content: |
+          . {{ venv_path }}/bin/activate
+          tpv dry-run "$@" --job-conf {{ tpv_check_dir }}/job_conf.yml \
+          {{ tpv_check_dir }}/shared_tpv_tools.yml \
+          {% for tpv_file in galaxy_job_rules %}
+          {% if tpv_file.endswith('.yml.j2') or tpv_file.endswith('.yml') %}
+          {{ tpv_check_dir }}/{{ tpv_file | regex_replace(regex) }} \
+          {% endif %}
+          {% endfor %}
